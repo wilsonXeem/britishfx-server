@@ -12,6 +12,8 @@ const userRoutes = require("./routes/user");
 
 const app = express();
 
+const ALLOWED_ORIGIN = process.env.CLIENT_URL || "https://crestmontapex.us";
+
 app.use(compression());
 
 // Parsing incoming requests
@@ -20,11 +22,10 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Set headers
 app.use((req, res, next) => {
-  // TODO: In production, restrict CORS to https://www.crestmontapex.com
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, , X-Requested-With, Origin, Accept",
+    "Content-Type, Authorization, X-Requested-With, Origin, Accept",
   );
   res.setHeader(
     "Access-Control-Allow-Methods",
