@@ -20,14 +20,15 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Set headers
 app.use((req, res, next) => {
+  // TODO: In production, restrict CORS to https://www.crestmontapex.com
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, , X-Requested-With, Origin, Accept"
+    "Content-Type, Authorization, , X-Requested-With, Origin, Accept",
   );
   res.setHeader(
     "Access-Control-Allow-Methods",
-    "OPTIONS, GET, POST, PUT, PATCH, DELETE"
+    "OPTIONS, GET, POST, PUT, PATCH, DELETE",
   );
 
   if (req.method === "OPTIONS") {
@@ -48,12 +49,13 @@ app.use((err, req, res, next) => {
 });
 
 mongoose
-  .connect(process.env.MONGODB, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+  .connect(process.env.MONGODB)
   .then(() => {
-    console.log("Database Connected");
+    console.log("Database connected — crestmontapex (local)");
+  })
+  .catch((err) => {
+    console.error("Database connection error:", err.message);
+    process.exit(1);
   });
 
 app.listen(process.env.PORT, () => console.log("Server has started"));

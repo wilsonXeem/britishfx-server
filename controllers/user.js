@@ -2,6 +2,8 @@ const User = require("../models/user");
 const Transactions = require("../models/transactions");
 const { validationResult } = require("express-validator");
 const nodemailer = require("nodemailer");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 const error = require("../util/error-handler");
 const { userExist } = require("../util/finder");
@@ -9,12 +11,12 @@ const { userExist } = require("../util/finder");
 const schedule = require("node-schedule");
 
 const transporter = nodemailer.createTransport({
-  host: "mail.privateemail.com",
+  host: process.env.EMAIL_HOST,
   secure: true,
   port: 465,
   auth: {
-    user: "support@britishfx.net",
-    pass: "mosqueboy10",
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
 });
 
@@ -56,7 +58,7 @@ schedule.scheduleJob("0 23 * * *", async () => {
 module.exports.userSignUp = async (req, res, next) => {
   const investmentPlan = req.body.investmentPlan,
     username = req.body.username,
-    password = req.body.password,
+    password = req.body.password?.firstPassword ?? req.body.password,
     email = req.body.email,
     country = req.body.country;
 
@@ -71,14 +73,15 @@ module.exports.userSignUp = async (req, res, next) => {
       error.errorHandler(
         res,
         "Email already exists! Kindly Login to continue or use another email.",
-        "email"
+        "email",
       );
     } else {
       // Create new user
+      const hashedPassword = await bcrypt.hash(password, 12);
       const user = new User({
         investmentPlan,
         username,
-        password,
+        password: hashedPassword,
         email,
         country,
       });
@@ -89,12 +92,12 @@ module.exports.userSignUp = async (req, res, next) => {
       console.log(newUser.email);
 
       const mailOptions = {
-        from: "<support@britishfx.net>",
+        from: "<support@crestmontapex.com>",
         to: email,
-        subject: "BritishFX Account Verification",
+        subject: "Crestmont Apex Account Verification",
         html: `<h1>Dear ${username}</h1>
               <p>Your account has been verified. Kindly click below to verify your account</p>
-              <button style="font-size: large; width: 30%; height: 3rem; font-weight: bold; background-color: blue;" ><a href="https://britishfx.net/login/${email}" onclick="verify()" style="text-decoration: none; color: white;">Log in</a></button>`,
+              <button style="font-size: large; width: 30%; height: 3rem; font-weight: bold; background-color: #C9A84C;" ><a href="https://www.crestmontapex.com/login/${email}" onclick="verify()" style="text-decoration: none; color: white;">Log in</a></button>`,
       };
 
       transporter.sendMail(mailOptions, (error, info) => {
@@ -122,7 +125,7 @@ module.exports.userSignUp = async (req, res, next) => {
 module.exports.referralSignUp = async (req, res, next) => {
   const investmentPlan = req.body.investmentPlan,
     username = req.body.username,
-    password = req.body.password,
+    password = req.body.password?.firstPassword ?? req.body.password,
     email = req.body.email,
     country = req.body.country,
     sponsor = req.body.sponsor;
@@ -138,14 +141,15 @@ module.exports.referralSignUp = async (req, res, next) => {
       error.errorHandler(
         res,
         "Email already exists! Kindly Login to continue or use another email.",
-        "email"
+        "email",
       );
     } else {
       // Create new user
+      const hashedPassword = await bcrypt.hash(password, 12);
       const user = new User({
         investmentPlan,
         username,
-        password,
+        password: hashedPassword,
         email,
         country,
         referredBy: sponsor,
@@ -159,12 +163,12 @@ module.exports.referralSignUp = async (req, res, next) => {
       await reff.save();
 
       const mailOptions = {
-        from: "<support@britishfx.net>",
+        from: "<support@crestmontapex.com>",
         to: email,
-        subject: "BritishFX Account Verification",
+        subject: "Crestmont Apex Account Verification",
         html: `<h1>Dear ${username}</h1>
               <p>Your account has been verified. Kindly click below to verify your account</p>
-              <button style="font-size: large; width: 30%; height: 3rem; font-weight: bold; background-color: blue;" ><a href="https://britishfx.net/login" style="text-decoration: none; color: white;">Log in</a></button>`,
+              <button style="font-size: large; width: 30%; height: 3rem; font-weight: bold; background-color: #C9A84C;" ><a href="https://www.crestmontapex.com/login" style="text-decoration: none; color: white;">Log in</a></button>`,
       };
 
       transporter.sendMail(mailOptions, (error, info) => {
@@ -201,15 +205,22 @@ module.exports.userLogin = async (req, res, next) => {
     // Check if user exist
     const emailExist = await userExist("email", email);
     if (!emailExist) error.errorHandler(res, "incorrect email", "email");
-    if (emailExist.password !== password)
-      error.errorHandler(res, "incorrect password", "password");
+    const valid = await bcrypt.compare(password, emailExist.password);
+    if (!valid) error.errorHandler(res, "incorrect password", "password");
 
     if (emailExist.verified == false) {
       error.errorHandler(res, "User not verified", "verify");
     }
     // Continue if no errors
     const user = emailExist;
-    res.status(200).json({ message: "Sign in successful", type: "user", user });
+    const token = jwt.sign(
+      { id: user._id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+    res
+      .status(200)
+      .json({ message: "Sign in successful", type: "user", user, token });
   } catch (err) {
     error.error(err, next);
   }
@@ -270,11 +281,11 @@ module.exports.verifyUser = async (req, res, next) => {
       error.errorHandler(res, "User does not exist", "email");
     } else {
       const mailOption = {
-        from: "<support@britishfx.net>",
+        from: "<support@crestmontapex.com>",
         to: email,
-        subject: "BritishFX Account Password Reset",
+        subject: "Crestmont Apex Password Reset",
         html: `<p>Kindly click below to reset your password</p>
-              <button style="font-size: large; width: 30%; height: 3rem; font-weight: bold; background-color: blue;" ><a href="https://britishfx.net/password-reset/${email}" style="text-decoration: none; color: white;">Reset</a></button>`,
+              <button style="font-size: large; width: 30%; height: 3rem; font-weight: bold; background-color: #C9A84C;" ><a href="https://www.crestmontapex.com/password-reset/${email}" style="text-decoration: none; color: white;">Reset</a></button>`,
       };
 
       transporter.sendMail(mailOption, (error, info) => {
@@ -298,7 +309,8 @@ module.exports.reset = async (req, res, next) => {
     password = req.body.password;
 
   try {
-    await User.findOneAndUpdate(email, { password: password });
+    const hashedResetPassword = await bcrypt.hash(password, 12);
+    await User.findOneAndUpdate({ email }, { password: hashedResetPassword });
     res
       .status(200)
       .json({ message: "Password changed successfully", type: "user" });
@@ -307,10 +319,6 @@ module.exports.reset = async (req, res, next) => {
   }
 };
 
-let minm = 100000;
-let maxm = 999999;
-let numGen = Math.floor(Math.random() * (maxm - minm + 1)) + minm;
-
 // Deposit Update
 module.exports.depositUpdate = async (req, res, next) => {
   const email = req.body.email,
@@ -318,6 +326,7 @@ module.exports.depositUpdate = async (req, res, next) => {
     modeOfPayment = req.body.modeOfPayment;
 
   try {
+    const numGen = Math.floor(Math.random() * (999999 - 100000 + 1)) + 100000;
     let user = await User.findOne({ email });
     user.account.deposit += amount;
     await user.transactions.deposit.unshift({
@@ -364,6 +373,7 @@ module.exports.withdrawalUpdate = async (req, res, next) => {
     modeOfPayment = req.body.modeOfPayment;
 
   try {
+    const numGen = Math.floor(Math.random() * (999999 - 100000 + 1)) + 100000;
     let user = await User.findOne({ email });
     user.account.withdrawal += amount;
     await user.transactions.withdrawal.unshift({
