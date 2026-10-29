@@ -23,6 +23,7 @@ router.delete("/admin/user/:id/transaction/:code", adminController.deleteTransac
 router.post("/admin/user/:id/transaction/:code/status", adminController.updateTransactionStatus);
 router.post("/admin/user/:id/plan", adminController.updatePlan);
 router.post("/admin/user/:id/verify", adminController.toggleVerify);
+router.post("/admin/user/:id/sendverification", adminController.sendVerificationEmail);
 router.post("/admin/mail", adminController.sendMail);
 
 // Wildcard user fetch — must be last

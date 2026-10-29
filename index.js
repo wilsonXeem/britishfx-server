@@ -10,14 +10,21 @@ const userRoutes = require("./routes/user");
 
 const app = express();
 
-const ALLOWED_ORIGIN = process.env.CLIENT_URL || "https://crestmontapex.us";
+const ALLOWED_ORIGINS = [
+  "https://crestmontapex.us",
+  "https://www.crestmontapex.us",
+  "http://localhost:3000",
+];
 
 app.use(compression());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+  const origin = req.headers.origin;
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Origin, Accept");
   res.setHeader("Access-Control-Allow-Methods", "OPTIONS, GET, POST, PUT, PATCH, DELETE");
   if (req.method === "OPTIONS") return res.sendStatus(200);
@@ -52,3 +59,14 @@ app.use((err, req, res, next) => {
 
 // Export for Vercel — do not call app.listen()
 module.exports = app;
+
+// Start server locally when not on Vercel
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 9000;
+  mongoose.connect(process.env.MONGODB)
+    .then(() => {
+      console.log("Database connected — crestmontapex (local)");
+      app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    })
+    .catch((err) => console.error("Database connection error:", err.message));
+}

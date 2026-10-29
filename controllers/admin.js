@@ -4,14 +4,14 @@ const User = require("../models/user");
 const { userExist } = require("../util/finder");
 const nodemailer = require("nodemailer");
 
-const transporter = nodemailer.createTransport({
+const getTransporter = () => nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
   port: Number(process.env.EMAIL_PORT) || 465,
-  secure: process.env.EMAIL_SECURE === "true",
+  secure: process.env.EMAIL_SECURE !== "false",
   auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
 });
 
-const letterheadTemplate = (subject, body) => `
+const letterheadTemplate = (subject, body, cta = null) => `
 <!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -22,12 +22,12 @@ const letterheadTemplate = (subject, body) => `
         <!-- Letterhead header -->
         <tr>
           <td style="background:linear-gradient(135deg,#0A1628 0%,#0F1E35 100%);border-radius:12px 12px 0 0;padding:32px 40px;text-align:center;">
-            <div style="display:inline-flex;align-items:center;gap:10px;">
-              <div style="width:36px;height:36px;background:linear-gradient(135deg,#C9A84C,#e8c96a);border-radius:8px;display:inline-flex;align-items:center;justify-content:center;">
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 2L18 16H2L10 2Z" fill="#0A1628"/></svg>
-              </div>
-              <span style="font-family:Georgia,serif;font-size:22px;font-weight:700;color:#C9A84C;letter-spacing:0.04em;">CRESTMONT APEX</span>
-            </div>
+            <table cellpadding="0" cellspacing="0" style="margin:0 auto 8px;">
+              <tr>
+                <td style="width:36px;height:36px;background:#C9A84C;border-radius:8px;text-align:center;vertical-align:middle;font-size:18px;color:#0A1628;font-weight:bold;">&#9650;</td>
+                <td style="padding-left:10px;font-family:Georgia,serif;font-size:22px;font-weight:700;color:#C9A84C;letter-spacing:0.04em;vertical-align:middle;">CRESTMONT APEX</td>
+              </tr>
+            </table>
             <p style="margin:8px 0 0;color:rgba(255,255,255,0.45);font-size:12px;letter-spacing:0.12em;text-transform:uppercase;">Investment Platform</p>
           </td>
         </tr>
@@ -44,8 +44,9 @@ const letterheadTemplate = (subject, body) => `
         <tr><td style="background:#ffffff;padding:0 40px;"><hr style="border:none;border-top:1px solid #eee;margin:20px 0;"></td></tr>
         <!-- Body -->
         <tr>
-          <td style="background:#ffffff;padding:0 40px 32px;">
+          <td style="background:#ffffff;padding:0 40px ${cta ? "24px" : "32px"};">
             <div style="font-size:15px;line-height:1.8;color:#333;white-space:pre-wrap;">${body}</div>
+            ${cta ? `<div style="text-align:center;margin-top:28px;"><a href="${cta.url}" style="display:inline-block;background:linear-gradient(135deg,#C9A84C,#e8c96a);color:#0A1628;font-family:'Helvetica Neue',Arial,sans-serif;font-size:15px;font-weight:700;text-decoration:none;padding:14px 36px;border-radius:8px;letter-spacing:0.02em;">${cta.label}</a></div>` : ""}
           </td>
         </tr>
         <!-- Footer -->
@@ -62,7 +63,29 @@ const letterheadTemplate = (subject, body) => `
 </body>
 </html>`;
 
-/* Send branded mail */
+/* Send verification email to a user */
+module.exports.sendVerificationEmail = async (req, res, next) => {
+  const { id } = req.params;
+  try {
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ message: "User not found", type: "error" });
+    const transporter = getTransporter();
+    await transporter.sendMail({
+      from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_FROM_EMAIL}>`,
+      to: user.email,
+      subject: "Verify Your Crestmont Apex Account",
+      html: letterheadTemplate(
+        "Verify Your Account",
+        `Dear ${user.username},\n\nThank you for registering with Crestmont Apex. Your account is ready — please click the button below to verify your email address and activate your account.\n\nIf you did not create this account, please ignore this email.`,
+        { label: "Verify My Account", url: `https://crestmontapex.us/login/${user.email}` }
+      ),
+    });
+    res.status(200).json({ type: "ok", message: "Verification email sent" });
+  } catch (err) {
+    console.error("Verification mail error:", err.message);
+    res.status(500).json({ message: err.message, type: "error" });
+  }
+};
 module.exports.sendMail = async (req, res, next) => {
   const { to, subject, body } = req.body;
   if (!to || !subject || !body) return res.status(400).json({ message: "Missing fields", type: "error" });
@@ -70,6 +93,7 @@ module.exports.sendMail = async (req, res, next) => {
     const recipients = to === "all"
       ? (await User.find({}, "email").exec()).map(u => u.email)
       : [to];
+    const transporter = getTransporter();
     await transporter.sendMail({
       from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_FROM_EMAIL}>`,
       to: recipients.join(","),
@@ -78,7 +102,8 @@ module.exports.sendMail = async (req, res, next) => {
     });
     res.status(200).json({ type: "ok", message: `Mail sent to ${recipients.length} recipient(s)` });
   } catch (err) {
-    error.error(err, next);
+    console.error("Mail error:", err.message);
+    res.status(500).json({ message: err.message, type: "error" });
   }
 };
 
