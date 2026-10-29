@@ -6,8 +6,8 @@ const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
-  port: 465,
-  secure: true,
+  port: Number(process.env.EMAIL_PORT) || 465,
+  secure: process.env.EMAIL_SECURE === "true",
   auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
 });
 
@@ -71,7 +71,7 @@ module.exports.sendMail = async (req, res, next) => {
       ? (await User.find({}, "email").exec()).map(u => u.email)
       : [to];
     await transporter.sendMail({
-      from: `"Crestmont Apex" <${process.env.EMAIL_USER}>`,
+      from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_FROM_EMAIL}>`,
       to: recipients.join(","),
       subject,
       html: letterheadTemplate(subject, body),
