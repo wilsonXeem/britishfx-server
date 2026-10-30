@@ -203,19 +203,35 @@ module.exports.deleteTransaction = async (req, res, next) => {
   }
 };
 
-/* Update transaction status */
+/* Update transaction status — increments account fields on approval */
 module.exports.updateTransactionStatus = async (req, res, next) => {
   const { id, code } = req.params;
   const { status } = req.body;
   try {
     const user = await User.findById(id);
     if (!user) return error.errorHandler(res, "User not found", "user");
+
     const dep = user.transactions.deposit.find(t => t.referrenceCode === code);
-    if (dep) dep.status = status;
     const wit = user.transactions.withdrawal.find(t => t.referrenceCode === code);
-    if (wit) wit.status = status;
     const all = user.transactions.allTransactions.find(t => t.referrenceCode === code);
+
+    const prev = dep?.status || wit?.status;
+
+    if (dep) dep.status = status;
+    if (wit) wit.status = status;
     if (all) all.status = status;
+
+    // Increment account fields when admin approves
+    if (status === "success" && prev !== "success") {
+      if (dep) user.account.deposit = (user.account.deposit || 0) + Number(dep.amount);
+      if (wit) user.account.withdrawal = (user.account.withdrawal || 0) + Number(wit.amount);
+    }
+    // Reverse if admin rejects a previously approved transaction
+    if (status !== "success" && prev === "success") {
+      if (dep) user.account.deposit = Math.max(0, (user.account.deposit || 0) - Number(dep.amount));
+      if (wit) user.account.withdrawal = Math.max(0, (user.account.withdrawal || 0) - Number(wit.amount));
+    }
+
     await user.save();
     res.status(200).json({ type: "user", user });
   } catch (err) {

@@ -4,13 +4,15 @@ module.exports = {
     next(err);
   },
   errorHandler: (res, message, type = "") => {
-    res.send({ error: "error", message: message, type });
+    res.status(400).json({ error: "error", message, type });
+    throw new Error(message);
   },
   validationError: (err, res, type = "") => {
     if (!err.isEmpty()) {
       const message = err.array()[0].msg;
       type = err.array()[0].param;
-      res.send({ error: message, type });
+      res.status(400).json({ error: message, type });
+      throw new Error(message);
     }
   },
 };

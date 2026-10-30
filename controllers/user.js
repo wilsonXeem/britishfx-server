@@ -328,39 +328,28 @@ module.exports.depositUpdate = async (req, res, next) => {
   try {
     const numGen = Math.floor(Math.random() * (999999 - 100000 + 1)) + 100000;
     let user = await User.findOne({ email });
-    user.account.deposit += amount;
-    await user.transactions.deposit.unshift({
-      referrenceCode: numGen,
-      amount: amount,
-      modeOfPayment: modeOfPayment,
+    // Do NOT increment account.deposit yet — admin approves via status update
+    const entry = {
+      referrenceCode: String(numGen),
+      amount: Number(amount),
+      modeOfPayment,
+      status: "pending",
       username: user.username,
       userId: user._id,
       email: user.email,
-    });
-
-    await user.transactions.allTransactions.unshift({
-      referrenceCode: numGen,
-      amount: amount,
-      modeOfPayment: modeOfPayment,
+      dateOfTrans: new Date().toLocaleDateString(),
+    };
+    user.transactions.deposit.unshift(entry);
+    user.transactions.allTransactions.unshift({
+      referrenceCode: String(numGen),
+      amount: Number(amount),
+      modeOfPayment,
       transactionType: "deposit",
+      status: "pending",
+      dateOfTrans: entry.dateOfTrans,
     });
-
-    let transactions = new Transactions({
-      referrenceCode: numGen,
-      amount: amount,
-      modeOfPayment: modeOfPayment,
-      username: user.username,
-      email: user.email,
-      userId: user._id,
-      transactionType: "deposit",
-    });
-
-    await transactions.save();
-
     await user.save();
-    res
-      .status(200)
-      .json({ message: "Deposit done successfully", type: "deposit", user });
+    res.status(200).json({ message: "Deposit request submitted", type: "deposit", user });
   } catch (err) {
     error.error(err, next);
   }
@@ -370,46 +359,35 @@ module.exports.depositUpdate = async (req, res, next) => {
 module.exports.withdrawalUpdate = async (req, res, next) => {
   const email = req.body.email,
     amount = req.body.amount,
-    modeOfPayment = req.body.modeOfPayment;
+    modeOfPayment = req.body.modeOfPayment,
+    wallet = req.body.wallet;
 
   try {
     const numGen = Math.floor(Math.random() * (999999 - 100000 + 1)) + 100000;
     let user = await User.findOne({ email });
-    user.account.withdrawal += amount;
-    await user.transactions.withdrawal.unshift({
-      referrenceCode: numGen,
-      amount: amount,
-      modeOfPayment: modeOfPayment,
+    // Do NOT increment account.withdrawal yet — admin approves via status update
+    const entry = {
+      referrenceCode: String(numGen),
+      amount: Number(amount),
+      modeOfPayment,
+      status: "pending",
+      wallet: wallet || "",
       username: user.username,
       email: user.email,
       userId: user._id,
-    });
-
-    await user.transactions.allTransactions.unshift({
-      referrenceCode: numGen,
-      amount: amount,
-      modeOfPayment: modeOfPayment,
+      dateOfTrans: new Date().toLocaleDateString(),
+    };
+    user.transactions.withdrawal.unshift(entry);
+    user.transactions.allTransactions.unshift({
+      referrenceCode: String(numGen),
+      amount: Number(amount),
+      modeOfPayment,
       transactionType: "withdrawal",
+      status: "pending",
+      dateOfTrans: entry.dateOfTrans,
     });
-
-    let transactions = new Transactions({
-      referrenceCode: numGen,
-      amount: amount,
-      modeOfPayment: modeOfPayment,
-      username: user.username,
-      email: user.email,
-      userId: user._id,
-      transactionType: "deposit",
-    });
-
-    await transactions.save();
-
     await user.save();
-    res.status(200).json({
-      message: "Withdrawal done successfully",
-      type: "withdrawal",
-      user,
-    });
+    res.status(200).json({ message: "Withdrawal request submitted", type: "withdrawal", user });
   } catch (err) {
     error.error(err, next);
   }
